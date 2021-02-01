@@ -11,7 +11,27 @@ wRR=argminw∥y−Xw∥^2+λ∥w∥2.
 
 Write the code that takes in data 'y'  and 'X' and outputs 'wRR' for an arbitrary value of  'λ'.
 
-**PART 2:** In the same code, we will also implement the ***'active learning procedure'***. The assignment provides an arbitrary setting of  'λ'  and  'σ2'  and asks that you provide the first 10 locations you would measure from a set D={x}  given a set of measured pairs (y,X). Please look over the slides carefully to remind yourself about the sequential evolution of the sets D and (y,X).
+**PART 2:** In the same code, we will also implement the ***'active learning procedure'***. The assignment provides an arbitrary setting of  'λ'  and  'σ2'  and asks that you provide the first 10 locations you would measure from a set D={X}  given a set of measured pairs (y,X). Please look over the slides carefully to remind yourself about the sequential evolution of the sets D and (y,X). In other words, what we are after on this part is to obtain the index of the X vectors where we will found the ground truth, also known as the 'points of maximum uncertainty'.
+
+Further to the above, in this part, the code shall compute the covariance matrix. How? By selecting the location which maximizes uncertainty. Next, update the covariance matrix. Among the remaining points, select the index of the one which again maximizes uncertainty. Update covariance again and so on.
+
+The covariance matrix in a ridge regression setting is: 
+	(np.dot(X.T, X) - lambda * I )^(-1)
+
+From Lecture 5 re 'active learning', Learning 'w' and making predictions for new 'y0' is a two-step procedure:
+- Form the predictive distribution p(y0|x0, y, X).
+- Update the posterior distribution p(w|y, X, y0, x0).
+
+An “active learning” strategy can be explained as follows. Imagine we already have data (y, X) for X ⊂ D, and the posterior p(w|y, X).
+We can construct the predictive distribution for every remaining x0 ∈ D.
+p(y0|x0, y, X) = N(y0|µ0, σ20),
+µ0 = xT0µ,
+σ20 = σ2 + xT0Σx0.
+For each x0, σ20 tells how confident we are. This suggests the following:
+1. Form predictive distribution p(y0|x0, y, X) for all unmeasured x0 ∈ D.
+2. Pick the x0 for which σ20 is largest and measure y0.
+3. Update the posterior p(w|y, X) where y ← (y, y0) and X ← (X, x0).
+4. Return to #1 using the updated posterior.
 
 More details about the inputs we provide and the expected outputs are given below.
 
@@ -19,7 +39,7 @@ More details about the inputs we provide and the expected outputs are given belo
 
 ## Execute the program
 The following command shall execute your program
-$ python hw1_regression.py lambda sigma2 X_train.csv y_train.csv X_test.csv
+$ python3 hw1_regression.py lambda sigma2 X_train.csv y_train.csv X_test.csv
 
 Note the following:
 - The name of the train and testing X and y datasets. 
