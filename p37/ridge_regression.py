@@ -76,13 +76,16 @@ def split_data(df, ratio:float = 0.7):
 
     # split the dataset into train and test sets
     # drop last column of X which will become 'y' vector
-    # TODO: add a column of '1' to the X matrix
     df_X_train = df[df.columns[:-1]].loc[0 : rows_split]
     df_X_test = df[df.columns[:-1]].loc[rows_split : rows]
 
     # get the last column of X as the 'y' vector and split it into train and test sets
     df_y_train = df[df.columns[cols - 1]].loc[0 : rows_split] 
     df_y_test = df[df.columns[cols - 1]].loc[rows_split : rows]
+
+    # add a column of '1' to the X matrix
+    df_X_train['Ones'] = np.ones((rows_split + 1), dtype = int)
+    df_X_test['Ones'] = np.ones((rows - rows_split), dtype = int)
 
     return df_X_train, df_X_test, df_y_train, df_y_test
 
@@ -111,17 +114,17 @@ def RidgeRegression(X, y, l:int = 2):
 
     return wRR, cov_matrix, deg_f
 
-def update_posterior(X, y, X_old, y_old, l:int = 2, sigma2:int = 3):
+def update_posterior(X, y, xx_old, xy_old, l:int = 2, sigma2:int = 3):
     n, m = X.shape
     I = np.identity(m)
 
-    X_old = np.dot(X.T, X) + X_old
-    y_old = np.dot(X.T, y) + y_old
+    xx_old = np.dot(X.T, X) + xx_old  # XoXoT + XiXiT 
+    xy_old = np.dot(X.T, y) + xy_old  # Xoyo + Xiyi
 
-    new_cov = np.linalg.inv(l * I + (1 / sigma2) * X_old)
-    new_mean = (np.linalg.inv(l * sigma2 * I + X_old)).dot(y_old)
-
-    return new_cov, new_mean, X_old, y_old
+    new_cov = np.linalg.inv(l * I + (1 / sigma2) * xx_old) # new covariance Σ, captures uncertainty about w as Var[wRR]
+    new_mean = np.dot((np.linalg.inv(l * sigma2 * I + xx_old)),xy_old) # new µ
+    
+    return new_cov, new_mean, xx_old, xy_old
 
 def activeLearning(X, y, X_test, l:int = 2, sigma2:int = 3):
 
@@ -130,21 +133,27 @@ def activeLearning(X, y, X_test, l:int = 2, sigma2:int = 3):
 
     X_indexes = []
 
-    X_old = np.zeros((m, m))
-    y_old = np.zeros(m)
+    # set up an xx_old and xy_old to zero to start with
+    xx_old = np.zeros((m, m))
+    xy_old = np.zeros(m)
 
-    new_cov, new_mean, X_old, y_old = update_posterior(X, y, X_old, y_old, l, sigma2)
+    new_cov, new_mean, xx_old, xy_old = update_posterior(X, y, xx_old, xy_old, l, sigma2)
 
     #Select the 10 data points to measure as per the assignment requirements
     for i in range(10):
         # Pick x0 for which sigma20 is largest
-        cov_matrix = np.dot((np.dot(X_test, new_cov)), X_test.T)
+        cov_matrix = np.dot(np.dot(X_test, new_cov), X_test.T)
         row_largest = np.argmax(np.diagonal(cov_matrix))
 
         # update x and y values
+        # first reset indexes for X_test dataframe so you can call it from its row index number using 'row_largest'
         X_test = X_test.reset_index(drop=True)
-        X = X_test.iloc[[row_largest]].to_numpy()[0]
-        y = np.dot(X, new_mean)
+        # then get x0 and pass it onto the X matrix
+        x0 = X_test.iloc[[row_largest]].to_numpy()[0]
+        X.loc[row_largest] = x0
+        # calculate y0 and update the y vector
+        y0 = np.dot(X, new_mean)
+        y = y0
 
         #row, _ = X_test.shape
         #X_index = list(range(row))[row_largest]
@@ -154,14 +163,12 @@ def activeLearning(X, y, X_test, l:int = 2, sigma2:int = 3):
         X_test = X_test.drop(index = row_largest)
 
         # Update the posterior distribution
-        # TODO: fix error here: 'not enough values to unpack because X is an 1D array'; review the conversion of X onto a 1D array above
-        new_cov, new_mean, X_old, y_old = update_posterior(X, y, X_old, y_old, l, sigma2)
+        new_cov, new_mean, xx_old, xy_old = update_posterior(X, y, xx_old, xy_old, l, sigma2)
 
     # Create 1-based indexes
     X_indexes = [i + 1 for i in X_indexes]
 
     return X_indexes
-
 
 def write_csv(filename, a):
         # write the outputs csv file
@@ -187,7 +194,7 @@ def main():
     # split the dataset
     df_X_train, df_X_test, df_y_train, df_y_test = split_data(df, ratio = 0.7)
     
-    vis_data(df_X_train, df_y_train)
+    #vis_data(df_X_train, df_y_train)
 
     write_csv('X_train.csv', df_X_train)
     write_csv('y_train.csv', df_y_train)
@@ -202,13 +209,13 @@ def main():
     lambda_input = 2
     wRR, cov_matrix, deg_f = RidgeRegression(df_X_train,df_y_train,lambda_input)
     # write the output csv file with the wRR values
-    np.savetxt("wRR_" + str(lambda_input) + ".csv", wRR, delimiter="\n")
+    np.savetxt("wRR_" + str(lambda_input) + ".csv", wRR, fmt='%1.2f', delimiter="\n")
 
     #### Part 2
     sigma2_input = 3
     X_indexes = activeLearning(df_X_train, df_y_train, df_X_test, lambda_input, sigma2_input)
     # write the output csv file
-    np.savetxt("active_" + str(lambda_input) + "_" + str(int(sigma2_input)) + ".csv", active, delimiter=",")
+    np.savetxt("active_" + str(lambda_input) + "_" + str(int(sigma2_input)) + ".csv", X_indexes, fmt='%.d', delimiter="\n")
     
 if __name__ == '__main__':
     main()
